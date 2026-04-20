@@ -36,6 +36,7 @@ namespace BlindDuel
             if (InputMap.IsDuelOnlySuppress(Type)) return;
 
             __result = Input.GetKeyDown(keyCode);
+            if (__result) InputMap.TrackBrowseDirection(Type);
         }
 
         static Dictionary<int, KeyCode> GetMap() => _map ??= InputMap.Build();
@@ -51,7 +52,11 @@ namespace BlindDuel
         {
             if (__result && InputMap.IsRightStickDuelSuppress(Type)) { __result = false; return; }
 
-            if (__result) return;
+            if (__result)
+            {
+                InputMap.TrackBrowseDirection(Type);
+                return;
+            }
             if (!Application.isFocused) return;
 
             var map = GetMap();
@@ -63,6 +68,7 @@ namespace BlindDuel
             if (InputMap.IsDuelOnlySuppress(Type)) return;
 
             __result = Input.GetKey(keyCode);
+            if (__result) InputMap.TrackBrowseDirection(Type);
         }
 
         static Dictionary<int, KeyCode> GetMap() => _map ??= InputMap.Build();
@@ -159,6 +165,17 @@ namespace BlindDuel
             if (type == _btnOption2) return !NavigationState.IsInDuel;
             if (type == _btnL3) return NavigationState.IsInDuel;
             return false;
+        }
+
+        /// <summary>
+        /// Track UP/DOWN input direction for duel zone browse lists.
+        /// Called from GetKeyDown/GetKey postfixes when a directional input is detected.
+        /// </summary>
+        public static void TrackBrowseDirection(int type)
+        {
+            if (DuelState.LastBrowsePosition < 0) return;
+            if (type == _btnDown) DuelState.BrowseDirection = 1;
+            else if (type == _btnUp) DuelState.BrowseDirection = -1;
         }
 
     }

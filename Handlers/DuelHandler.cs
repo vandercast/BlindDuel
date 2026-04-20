@@ -82,15 +82,90 @@ namespace BlindDuel
                             }
                         }
                         catch (Exception ex) { Log.Write($"[DuelHandler] ListCard read: {ex.Message}"); }
-                    }
 
-                    // No ListCard (cancel/confirm button) — reset card dedup so
-                    // navigating back to a card re-reads it.
-                    _lastSelButton = null;
-                    return null;
+                        // m_CardData empty — fall through to zone browse fallback below
+                    }
+                    else
+                    {
+                        // No ListCard (cancel/confirm button) — reset card dedup so
+                        // navigating back to a card re-reads it.
+                        _lastSelButton = null;
+                        return null;
+                    }
                 }
             }
             catch (Exception ex) { Log.Write($"[DuelHandler] CardSelection: {ex.Message}"); }
+
+            // Zone browse fallback (Graveyard, Extra Deck, Banished opened with X).
+            // Uses a running counter (DuelState.BrowseIndex) adjusted by BrowseDirection
+            // (+1 for down, -1 for up) because the scroll view recycles ~7 template
+            // slots, making sibling position unreliable for lists longer than 7 cards.
+            if (DuelState.LastBrowsePosition >= 0)
+            {
+                try
+                {
+                    // Confirm this is a browse list button (template(Clone) ancestor)
+                    if (!IsBrowseListButton(button))
+                    {
+                        // Not in a browse list — skip fallback for unrelated buttons
+                    }
+                    else
+                    {
+                        int player = DuelState.LastBrowsePlayer;
+                        int position = DuelState.LastBrowsePosition;
+                        int totalCards = 0;
+                        try { totalCards = Engine.GetCardNum(player, position); }
+                        catch { }
+
+                        // Apply direction to get the new logical index
+                        int dir = DuelState.BrowseDirection;
+                        int logicalIdx = DuelState.BrowseIndex + dir;
+
+                        // Clamp to valid range
+                        if (logicalIdx < 0) logicalIdx = 0;
+                        if (totalCards > 0 && logicalIdx >= totalCards)
+                            logicalIdx = totalCards - 1;
+
+                        DuelState.BrowseIndex = logicalIdx;
+
+                        // Suppress duplicate reads at list boundaries
+                        if (logicalIdx == DuelState.LastBrowseLogicalIdx)
+                            return "";
+                        DuelState.LastBrowseLogicalIdx = logicalIdx;
+
+                        string indexStr = totalCards > 0 ? $"{logicalIdx + 1} of {totalCards}" : null;
+
+                        // Don't reveal opponent's face-down cards
+                        if (!DuelState.IsMyPlayer(player))
+                        {
+                            try
+                            {
+                                if (!Engine.GetCardFace(player, position, logicalIdx))
+                                {
+                                    string msg = indexStr != null ? $"Face-down card, {indexStr}" : "Face-down card";
+                                    Speech.SayItem(msg);
+                                    return "";
+                                }
+                            }
+                            catch { }
+                        }
+
+                        int mrk = Engine.GetCardID(player, position, logicalIdx);
+                        if (mrk > 0)
+                        {
+                            CardReader.SpeakCardFromData(mrk, indexStr);
+                            return "";
+                        }
+                        else
+                        {
+                            string msg = indexStr != null ? $"Face-down card, {indexStr}" : "Face-down card";
+                            Speech.SayItem(msg);
+                            return "";
+                        }
+                    }
+                }
+                catch (Exception ex) { Log.Write($"[DuelHandler] Zone browse fallback: {ex.Message}"); }
+            }
 
             string name = button.name;
 
@@ -146,6 +221,90 @@ namespace BlindDuel
             }
             catch (Exception ex) { Log.Write($"[DuelHandler] SelectionIndex: {ex.Message}"); }
             return null;
+        }
+
+        /// <summary>
+        /// Check if button is inside a browse list (template(Clone) under Content,
+        /// or DuelListCard wrapper).
+        /// </summary>
+        private static bool IsBrowseListButton(SelectionButton button)
+        {
+            try
+            {
+                var current = button.transform;
+                for (int i = 0; i < 6 && current != null; i++)
+                {
+                    if (current.name.Contains("DuelListCard"))
+                        return true;
+                    if (current.name == "template(Clone)"
+                        && current.parent != null
+                        && current.parent.name == "Content")
+                        return true;
+                    current = current.parent;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        /// <summary>
+        /// Find a card's "X of Y" index string by scanning the Engine zone
+        /// for a matching card ID.
+        /// </summary>
+        private static string FindCardIndex(int player, int position, int totalCards, int cardid)
+        {
+            try
+            {
+                for (int i = 0; i < totalCards; i++)
+                {
+                    if (Engine.GetCardID(player, position, i) == cardid)
+                        return $"{i + 1} of {totalCards}";
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        /// <summary>
+        /// Get 0-based index and total count of a button in a duel card list.
+        /// Walks up the hierarchy looking for either:
+        ///   - "DuelListCard" ancestor (selection lists)
+        ///   - "template(Clone)" ancestor whose parent is "Content" (browse view)
+        /// Returns (-1, 0) if no matching ancestor is found — this prevents
+        /// the zone browse fallback from firing on unrelated buttons.
+        /// </summary>
+        private static (int index, int total) GetDuelListCardIndex(SelectionButton button)
+        {
+            try
+            {
+                var current = button.transform;
+                for (int i = 0; i < 6 && current != null; i++)
+                {
+                    bool match = current.name.Contains("DuelListCard")
+                              || (current.name == "template(Clone)"
+                                  && current.parent != null
+                                  && current.parent.name == "Content");
+
+                    if (match)
+                    {
+                        var container = current.parent;
+                        if (container == null) break;
+
+                        int idx = -1, total = 0;
+                        for (int j = 0; j < container.childCount; j++)
+                        {
+                            var child = container.GetChild(j);
+                            if (!child.gameObject.activeInHierarchy) continue;
+                            if (child == current) idx = total;
+                            total++;
+                        }
+                        return (idx, total);
+                    }
+                    current = current.parent;
+                }
+            }
+            catch (Exception ex) { Log.Write($"[DuelHandler] ListCardIndex: {ex.Message}"); }
+            return (-1, 0);
         }
     }
 }

@@ -110,6 +110,32 @@ namespace BlindDuel
         /// </summary>
         public static (int player, int position, int viewIndex)? DeferredFieldFocus { get; set; }
 
+        /// <summary>
+        /// Player and position of the last focused pile zone (Graveyard, Extra Deck, Banished).
+        /// Used by DuelHandler to look up card IDs when browsing zone lists via X button.
+        /// </summary>
+        public static int LastBrowsePlayer { get; set; } = -1;
+        public static int LastBrowsePosition { get; set; } = -1;
+
+        /// <summary>
+        /// Logical scroll index for zone browse lists (Graveyard, Extra Deck, Banished).
+        /// Adjusted by BrowseDirection on each button focus event in the browse view.
+        /// Reset to -1 when a pile zone is focused (first focus will advance to 0).
+        /// </summary>
+        public static int BrowseIndex { get; set; } = -1;
+
+        /// <summary>
+        /// Direction of browse navigation: +1 = scrolling down, -1 = scrolling up.
+        /// Set by InputPatches when UP/DOWN input is detected during duel browse.
+        /// </summary>
+        public static int BrowseDirection { get; set; } = 1;
+
+        /// <summary>
+        /// Last logical index that was spoken in browse mode.
+        /// Used to suppress duplicate reads when clamped at list boundaries.
+        /// </summary>
+        public static int LastBrowseLogicalIdx { get; set; } = -1;
+
         public static void Clear()
         {
             Cards.Clear();
@@ -127,6 +153,11 @@ namespace BlindDuel
             LastQueuedButtonText = null;
             DeferredSelectionButton = null;
             DeferredFieldFocus = null;
+            LastBrowsePlayer = -1;
+            LastBrowsePosition = -1;
+            BrowseIndex = -1;
+            BrowseDirection = 1;
+            LastBrowseLogicalIdx = -1;
         }
 
         public static CardRoot FindCardAtPosition(UnityEngine.Vector3 position)

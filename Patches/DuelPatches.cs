@@ -273,6 +273,27 @@ namespace BlindDuel
 
                 string zone = GetZoneName(player, position, viewIndex);
 
+                // Track pile zone focus so DuelHandler can look up card IDs
+                // when the player opens the zone's card list (X button).
+                if (position == Engine.PosGrave || position == Engine.PosExtra || position == Engine.PosExclude)
+                {
+                    DuelState.LastBrowsePlayer = player;
+                    DuelState.LastBrowsePosition = position;
+                    DuelState.BrowseIndex = -1;
+                    DuelState.BrowseDirection = 1;
+                    DuelState.LastBrowseLogicalIdx = -1;
+                }
+                else
+                {
+                    // Left the pile zone — clear browse state so the fallback
+                    // doesn't fire on unrelated buttons.
+                    DuelState.LastBrowsePlayer = -1;
+                    DuelState.LastBrowsePosition = -1;
+                    DuelState.BrowseIndex = -1;
+                    DuelState.BrowseDirection = 1;
+                    DuelState.LastBrowseLogicalIdx = -1;
+                }
+
                 // Pile zones (Extra Deck, Deck) — just speak the zone name,
                 // don't read individual cards from the pile.
                 if (position == Engine.PosExtra || position == Engine.PosDeck)
