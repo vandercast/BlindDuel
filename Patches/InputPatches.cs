@@ -34,9 +34,11 @@ namespace BlindDuel
             if (IsCtrlDuelSuppress(Type)) return;
             // Escape → Option2 (touchpad) only during duels
             if (InputMap.IsDuelOnlySuppress(Type)) return;
+            // Don't fire Cancel (Backspace) while a text input field is active —
+            // the user is deleting characters, not cancelling the screen.
+            if (InputMap.IsInputEditingSuppress(Type)) return;
 
             __result = Input.GetKeyDown(keyCode);
-            if (__result) InputMap.TrackBrowseDirection(Type);
         }
 
         static Dictionary<int, KeyCode> GetMap() => _map ??= InputMap.Build();
@@ -52,11 +54,7 @@ namespace BlindDuel
         {
             if (__result && InputMap.IsRightStickDuelSuppress(Type)) { __result = false; return; }
 
-            if (__result)
-            {
-                InputMap.TrackBrowseDirection(Type);
-                return;
-            }
+            if (__result) return;
             if (!Application.isFocused) return;
 
             var map = GetMap();
@@ -66,9 +64,9 @@ namespace BlindDuel
 
             if (IsCtrlDuelSuppress(Type)) return;
             if (InputMap.IsDuelOnlySuppress(Type)) return;
+            if (InputMap.IsInputEditingSuppress(Type)) return;
 
             __result = Input.GetKey(keyCode);
-            if (__result) InputMap.TrackBrowseDirection(Type);
         }
 
         static Dictionary<int, KeyCode> GetMap() => _map ??= InputMap.Build();
@@ -168,15 +166,13 @@ namespace BlindDuel
         }
 
         /// <summary>
-        /// Track UP/DOWN input direction for duel zone browse lists.
-        /// Called from GetKeyDown/GetKey postfixes when a directional input is detected.
+        /// Suppress Backspace → Cancel while an input field is being edited
+        /// (backspace should delete characters, not close the screen).
         /// </summary>
-        public static void TrackBrowseDirection(int type)
+        public static bool IsInputEditingSuppress(int type)
         {
-            if (DuelState.LastBrowsePosition < 0) return;
-            if (type == _btnDown) DuelState.BrowseDirection = 1;
-            else if (type == _btnUp) DuelState.BrowseDirection = -1;
+            if (type != _btnCancel) return false;
+            return PatchInputFieldValueChanged.IsEditing;
         }
-
     }
 }
